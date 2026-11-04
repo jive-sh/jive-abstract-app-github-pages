@@ -1,0 +1,40 @@
+{
+  "$schema": "./package.schema.json",
+  "name": "github-pages-fixture",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "jive:cicd:get-config": "bun ../../src/entrypoints/jive-app-github-pages.ts cicd get-config",
+    "jive:cicd:build": "bun ../../src/entrypoints/jive-app-github-pages.ts cicd build",
+    "jive:cicd:audit": "bun ../../src/entrypoints/jive-app-github-pages.ts cicd audit",
+    "jive:cicd:deploy:plan": "bun ../../src/entrypoints/jive-app-github-pages.ts cicd deploy-plan",
+    "jive:cicd:upload-artifacts": "bun ../../src/entrypoints/jive-app-github-pages.ts cicd upload-artifacts",
+    "jive:cicd:deploy": "bun ../../src/entrypoints/jive-app-github-pages.ts cicd deploy",
+    "build": "bun build ./src/index.html --outdir dist"
+  },
+  "jive": {
+    "cicd": {
+      "deploy": {
+        "verb": "Deploy to",
+        "branches": {
+          "main": [
+            "Production"
+          ]
+        },
+        "previews": false,
+        "sequentially": true
+      },
+      "runsOnPullRequests": true,
+      "runsOn": "ubuntu-latest",
+      "requiredSecrets": [
+        "GITHUB_TOKEN"
+      ]
+    },
+    "app-github-pages": {
+      "buildScript": "build",
+      "outputDir": "dist",
+      "domain": null
+    }
+  }
+}
