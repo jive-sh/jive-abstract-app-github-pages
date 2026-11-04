@@ -19,6 +19,7 @@ const SiteResponse = Schema.Struct({
 });
 
 const BuildResponse = Schema.Struct({
+  url: Schema.String,
   status: Schema.String,
   commit: Schema.String,
   error: Schema.Struct({ message: Schema.NullOr(Schema.String) }),
@@ -46,7 +47,7 @@ export class PagesApiImpl extends implementing(appGithubPagesModules.PagesApi).u
     const response = yield* this.send(input, HttpClientRequest.get(this.url(input, "pages/builds/latest")));
     if (response.status === 404) return Option.none();
     const build = yield* this.decode({ response, schema: BuildResponse, what: "latest Pages build" });
-    return Option.some({ status: build.status, commit: build.commit, errorMessage: Option.fromNullOr(build.error.message) });
+    return Option.some({ url: build.url, status: build.status, commit: build.commit, errorMessage: Option.fromNullOr(build.error.message) });
   }
 
   private url(input: PagesApiInput, path: string): string {

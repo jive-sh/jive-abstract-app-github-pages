@@ -62,8 +62,11 @@ export class DeployerImpl extends implementing(appGithubPagesModules.Deployer)
       yield* Effect.log(`GitHub Pages has already built ${commitSha}; ${site.value.htmlUrl} serves it`);
       return;
     }
-    yield* this.requestBuild({ api, commitSha });
-    const build = yield* this.awaitBuild({ api, commitSha });
+    // The build that was latest before the request is never the one requested, even when it is of the same commit:
+    // a rerun after a failed build publishes the same commit, and must not stop at its old failure.
+    const earlier = Option.map(latest, ({ url }) => url);
+    yield* this.requestBuild({ api, commitSha, earlier });
+    const build = yield* this.awaitBuild({ api, commitSha, earlier });
     if (build.status !== "built") {
       return yield* Effect.fail(`GitHub Pages could not build ${commitSha}: ${Option.getOrElse(build.errorMessage, () => `its build ended "${build.status}"`)}`);
     }
@@ -74,7 +77,7 @@ export class DeployerImpl extends implementing(appGithubPagesModules.Deployer)
    * Requests the build. GitHub runs one build per repository at a time, so a refusal while a build of this commit
    * already exists is that build, and the deploy waits for it instead of failing.
    */
-  private *requestBuild(input: { readonly api: PagesApiInput; readonly commitSha: string }): EffectGen<void, string> {
+  private *requestBuild(input: { readonly api: PagesApiInput; readonly commitSha: string; readonly earlier: Option.Option<string> }): EffectGen<void, string> {
     const { PagesApi } = this.dependencies;
     const requested = yield* Effect.result(effunct(PagesApi.requestBuild.bind(PagesApi))(input.api));
     if (requested._tag === "Success") {
@@ -82,20 +85,24 @@ export class DeployerImpl extends implementing(appGithubPagesModules.Deployer)
       return;
     }
     const latest = yield* PagesApi.latestBuild(input.api);
-    if (Option.isSome(latest) && latest.value.commit === input.commitSha) {
+    if (Option.isSome(latest) && this.isNewBuildOf({ build: latest.value, commitSha: input.commitSha, earlier: input.earlier })) {
       yield* Effect.log(`A GitHub Pages build of ${input.commitSha} is already ${latest.value.status}, so the request was refused: ${requested.failure}`);
       return;
     }
     return yield* Effect.fail(requested.failure);
   }
 
-  private *awaitBuild(input: { readonly api: PagesApiInput; readonly commitSha: string }): EffectGen<PagesBuild, string> {
+  private isNewBuildOf(input: { readonly build: PagesBuild; readonly commitSha: string; readonly earlier: Option.Option<string> }): boolean {
+    return input.build.commit === input.commitSha && !Option.contains(input.earlier, input.build.url);
+  }
+
+  private *awaitBuild(input: { readonly api: PagesApiInput; readonly commitSha: string; readonly earlier: Option.Option<string> }): EffectGen<PagesBuild, string> {
     const { PagesApi } = this.dependencies;
     const deadline = Duration.toMillis(BUILD_TIMEOUT);
     let waited = 0;
     for (;;) {
       const latest = yield* PagesApi.latestBuild(input.api);
-      if (Option.isSome(latest) && latest.value.commit === input.commitSha && FINAL_BUILD_STATUSES.includes(latest.value.status)) {
+      if (Option.isSome(latest) && this.isNewBuildOf({ build: latest.value, commitSha: input.commitSha, earlier: input.earlier }) && FINAL_BUILD_STATUSES.includes(latest.value.status)) {
         return latest.value;
       }
       if (waited >= deadline) {

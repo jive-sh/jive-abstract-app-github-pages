@@ -22,6 +22,8 @@ export interface PagesSite {
 
 /** One GitHub Pages build of a branch-published site. */
 export interface PagesBuild {
+  /** The build's own API URL, which tells two builds of the same commit apart. */
+  readonly url: string;
   /** "built" and "errored" are final; GitHub documents no other values, so anything else is still running. */
   readonly status: string;
   /** The publishing branch's commit it built. */

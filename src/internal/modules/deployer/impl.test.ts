@@ -60,7 +60,15 @@ const legacySite: PagesSite = {
   htmlUrl: "https://docs.jive.sh/",
 };
 
-const built = (commit: string): PagesBuild => ({ status: "built", commit, errorMessage: Option.none() });
+/** A build, told apart from others by its id, as GitHub's build URLs are. */
+function pagesBuild(input: { readonly id: number; readonly status: string; readonly commit: string; readonly errorMessage?: string }): Option.Option<PagesBuild> {
+  return Option.some({
+    url: `https://api.github.com/repos/jive-sh/docs/pages/builds/${input.id}`,
+    status: input.status,
+    commit: input.commit,
+    errorMessage: Option.fromUndefinedOr(input.errorMessage),
+  });
+}
 
 interface Scenario {
   readonly environment?: string;
@@ -120,7 +128,7 @@ const methods = (calls: ReadonlyArray<{ readonly method: string }>) => calls.map
 describe("deploy", () => {
   test("publishes the site, requests its build and waits until GitHub reports the published commit built", function* () {
     const { result, calls } = yield* deployWith({
-      latestBuilds: [Option.some(built(PREVIOUS)), Option.some(built(PREVIOUS)), Option.some({ status: "building", commit: PUBLISHED, errorMessage: Option.none() }), Option.some(built(PUBLISHED))],
+      latestBuilds: [pagesBuild({ id: 1, status: "built", commit: PREVIOUS }), pagesBuild({ id: 1, status: "built", commit: PREVIOUS }), pagesBuild({ id: 2, status: "building", commit: PUBLISHED }), pagesBuild({ id: 2, status: "built", commit: PUBLISHED })],
     });
     expect(result._tag).toBe("Success");
     expect(methods(calls)).toEqual(["checkSite", "publish", "getSite", "latestBuild", "requestBuild", "latestBuild", "latestBuild", "latestBuild"]);
@@ -133,21 +141,42 @@ describe("deploy", () => {
   });
 
   test("requests no build when GitHub has already built the published commit", function* () {
-    const { result, calls } = yield* deployWith({ latestBuilds: [Option.some(built(PUBLISHED))] });
+    const { result, calls } = yield* deployWith({ latestBuilds: [pagesBuild({ id: 2, status: "built", commit: PUBLISHED })] });
     expect(result._tag).toBe("Success");
     expect(methods(calls)).toEqual(["checkSite", "publish", "getSite", "latestBuild"]);
   });
 
   test("fails with GitHub's reason when the build errors", function* () {
     const { result } = yield* deployWith({
-      latestBuilds: [Option.none(), Option.some({ status: "errored", commit: PUBLISHED, errorMessage: Option.some("Page build failed.") })],
+      latestBuilds: [Option.none(), pagesBuild({ id: 2, status: "errored", commit: PUBLISHED, errorMessage: "Page build failed." })],
     });
     expect(result).toEqual(expect.objectContaining({ _tag: "Failure", failure: `GitHub Pages could not build ${PUBLISHED}: Page build failed.` }));
   });
 
+  test("a rerun after a failed build waits for the new build, not the old failure of the same commit", function* () {
+    const { result, calls } = yield* deployWith({
+      latestBuilds: [
+        pagesBuild({ id: 1, status: "errored", commit: PUBLISHED, errorMessage: "Page build failed." }),
+        pagesBuild({ id: 1, status: "errored", commit: PUBLISHED, errorMessage: "Page build failed." }),
+        pagesBuild({ id: 2, status: "building", commit: PUBLISHED }),
+        pagesBuild({ id: 2, status: "built", commit: PUBLISHED }),
+      ],
+    });
+    expect(result._tag).toBe("Success");
+    expect(methods(calls)).toEqual(["checkSite", "publish", "getSite", "latestBuild", "requestBuild", "latestBuild", "latestBuild", "latestBuild"]);
+  });
+
+  test("fails when GitHub refuses a rerun's build and only the old failure exists", function* () {
+    const { result } = yield* deployWith({
+      latestBuilds: [pagesBuild({ id: 1, status: "errored", commit: PUBLISHED, errorMessage: "Page build failed." })],
+      *requestBuild() { return yield* Effect.fail("GitHub refused requesting a Pages build with HTTP 409"); },
+    });
+    expect(result).toEqual(expect.objectContaining({ _tag: "Failure", failure: "GitHub refused requesting a Pages build with HTTP 409" }));
+  });
+
   test("waits for a build of the commit already running when GitHub refuses a second", function* () {
     const { result, calls } = yield* deployWith({
-      latestBuilds: [Option.some(built(PREVIOUS)), Option.some({ status: "building", commit: PUBLISHED, errorMessage: Option.none() }), Option.some(built(PUBLISHED))],
+      latestBuilds: [pagesBuild({ id: 1, status: "built", commit: PREVIOUS }), pagesBuild({ id: 2, status: "building", commit: PUBLISHED }), pagesBuild({ id: 2, status: "built", commit: PUBLISHED })],
       *requestBuild() { return yield* Effect.fail("GitHub refused requesting a Pages build with HTTP 409"); },
     });
     expect(result._tag).toBe("Success");
@@ -156,7 +185,7 @@ describe("deploy", () => {
 
   test("fails when GitHub refuses the build and none of the commit is running", function* () {
     const { result, calls } = yield* deployWith({
-      latestBuilds: [Option.some(built(PREVIOUS))],
+      latestBuilds: [pagesBuild({ id: 1, status: "built", commit: PREVIOUS })],
       *requestBuild() { return yield* Effect.fail("GitHub refused requesting a Pages build with HTTP 403: Resource not accessible by integration"); },
     });
     expect(result).toEqual(expect.objectContaining({ _tag: "Failure", failure: "GitHub refused requesting a Pages build with HTTP 403: Resource not accessible by integration" }));
@@ -164,7 +193,7 @@ describe("deploy", () => {
   });
 
   test("fails after the timeout when the build never finishes", function* () {
-    const { result } = yield* deployWith({ latestBuilds: [Option.some(built(PREVIOUS))] });
+    const { result } = yield* deployWith({ latestBuilds: [pagesBuild({ id: 1, status: "built", commit: PREVIOUS })] });
     expect(result).toEqual(expect.objectContaining({
       _tag: "Failure",
       failure: `GitHub Pages had not built ${PUBLISHED} after 10m; the latest build is of ${PREVIOUS}, built`,

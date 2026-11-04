@@ -6,6 +6,7 @@ import { OSPlatform, OSPlatformImpl, type ProcessResult, type SpawnProcessInput 
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { AppGithubPagesModules, appGithubPagesModules } from "../index";
+import { PUBLISHING_GIT_DIR } from "../../common/constants";
 import { PublishingBranchImpl } from "./impl";
 import type { PublishInput } from "./interface";
 
@@ -60,7 +61,10 @@ beforeAll(() => {
   mkdirSync(root, { recursive: true });
   git(["init", "--quiet", "--bare", remote]);
 });
-afterAll(() => { rmSync(root, { recursive: true, force: true }); });
+afterAll(() => {
+  rmSync(root, { recursive: true, force: true });
+  rmSync(resolve(PUBLISHING_GIT_DIR), { recursive: true, force: true });
+});
 
 describe("publish", () => {
   test("creates the branch with exactly the site's files, dotfiles and ignored files included", function* () {

@@ -90,7 +90,7 @@ describe("latestBuild", () => {
     expect(sent.map(({ method, url }) => ({ method, url }))).toEqual([{ method: "GET", url: `${GITHUB_API_URL}/repos/jive-sh/docs/pages/builds/latest` }]);
     expect(result).toEqual(expect.objectContaining({
       _tag: "Success",
-      success: Option.some({ status: "built", commit: JSON.parse(body).commit, errorMessage: Option.none() }),
+      success: Option.some({ url: JSON.parse(body).url, status: "built", commit: JSON.parse(body).commit, errorMessage: Option.none() }),
     }));
   });
 
@@ -101,7 +101,7 @@ describe("latestBuild", () => {
     });
     expect(result).toEqual(expect.objectContaining({
       _tag: "Success",
-      success: Option.some({ status: "errored", commit: JSON.parse(body).commit, errorMessage: Option.some("Page build failed.") }),
+      success: Option.some({ url: JSON.parse(body).url, status: "errored", commit: JSON.parse(body).commit, errorMessage: Option.some("Page build failed.") }),
     }));
   });
 

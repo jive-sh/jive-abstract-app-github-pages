@@ -5,7 +5,7 @@ A site whose `package.json` extends it gets a full CI/CD pipeline with no pipeli
 its deploy branch builds the site with whatever generator it uses (Astro, Vite, Bun's HTML bundler, plain files),
 publishes the result to the repository's `gh-pages` branch, and waits until GitHub Pages reports it built.
 
-Its CLI is `jive-app-github-pages`, so the target command for a new site is `jive create app-github-pages`. Today
+Its CLI is `jive-app-github-pages`, so the target command for a new site is `jive create app github pages`. Today
 the same thing is `jive-app-github-pages create <directory>`.
 
 ## Vocabulary

@@ -2,7 +2,7 @@
   "$schema": "./package.schema.json",
   "license": "MIT",
   "name": "jive-abstract-app-github-pages",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Jive abstract for static sites served by GitHub Pages: builds the site, then publishes it to the repository's gh-pages branch and has GitHub Pages build it, with its custom domain",
   "type": "module",
   "peerDependencies": {
